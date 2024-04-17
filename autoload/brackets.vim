@@ -20,22 +20,16 @@ endfunction
 
 " Prev/next char is alphabetical or not?
 function! s:is_alphabet(char) abort
-	" let l:char_is_alphabet = (a:char =~ "[a-zA-Z]")
-	" return (l:char_is_alphabet)
 	return (a:char =~ "[a-zA-Z]")
 endfunction
 
 " Prev/next char is full-width char or not?
 function! s:is_full_width(char) abort
-	" let l:charIsFullWidth = (a:char =~ "[^\x01-\x7E]")
-	" return (l:charIsFullWidth)
 	return (a:char =~ "[^\x01-\x7E]")
 endfunction
 
 " Prev/next char is the number or not?
 function! s:is_num(char) abort
-	" let l:charIsNum = (a:char =~ "[0-9]")
-	" return (l:charIsNum)
 	return (a:char =~ "[0-9]")
 endfunction
 
@@ -84,12 +78,7 @@ function! brackets#InputParentheses(parenthesis) abort
 	let l:prev_char = s:get_prev_string(1)
 	let l:next_char = s:get_next_string(1)
 	let l:parentheses = { "{": "}", "[": "]", "(": ")", "<": ">" }
-	" let l:next_char_is_empty = (l:next_char == "")
-	" let l:next_char_is_close_parenthesis = (l:next_char == "}" || l:next_char == "]" || l:next_char == ")" || l:next_char == ">")
-	" let l:next_char_is_space = (l:next_char == " ")
 
-	" if (l:next_char_is_close_parenthesis || l:next_char != "")
-	" if l:next_char_is_close_parenthesis || (! s:is_empty(l:next_char) && l:next_char != '')
 	if ! s:is_inside_parentheses(l:prev_char, l:next_char) && ! s:is_empty(l:next_char)
 	    return a:parenthesis
 	endif
@@ -242,24 +231,4 @@ function! brackets#InputBS() abort
 
 	return "\<BS>"
 endfunction
-
-" put in parentheses
-" function! brackets#ClipInParentheses(parenthesis) abort
-" 	let l:mode = mode()
-" 	let l:parentheses = { "{": "}", "[": "]", "(": ")" }
-" 	if l:mode ==# "v"
-" 		return "\"ac".a:parenthesis."\<ESC>\"agpi".l:parentheses[a:parenthesis]
-" 	elseif l:mode ==# "V"
-" 		return "\"ac".l:parentheses[a:parenthesis]."\<ESC>\"aPi".a:parenthesis."\<CR>\<ESC>\<UP>=%"
-" 	endif
-" endfunction
-"
-" put in quote
-" function! brackets#ClipInQuote(quote) abort
-" 	let l:mode = mode()
-" 	if l:mode ==# "v"
-" 		return "\"ac".a:quote."\<ESC>\"agpi".a:quote
-" 	endif
-" endfunction
-
 
