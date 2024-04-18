@@ -57,7 +57,7 @@ function! s:is_inside_parentheses(prev_char,next_char) abort
 	return (l:cursor_is_inside_parentheses1 || l:cursor_is_inside_parentheses2 || l:cursor_is_inside_parentheses3 || l:cursor_is_inside_parentheses4)
 endfunction
 
-" Is the cursor inside the quote or not?
+" Is the cursor inside a quote or not?
 function! s:is_inside_quote(prev_char, next_char) abort
 	let l:exists_quote = (a:prev_char == "'" && a:next_char == "'")
 	let l:exists_double_quote = (a:prev_char == "\"" && a:next_char == "\"")
@@ -65,6 +65,12 @@ function! s:is_inside_quote(prev_char, next_char) abort
     return (l:exists_quote || l:exists_double_quote || l:exists_back_quote)
 endfunction
 
+" Is the cursor inside the same quote or not?
+function! s:is_inside_the_same_quote(char, prev_char, next_char) abort
+    return  (a:prev_char == a:char && a:next_char == a:char)
+endfunction
+
+" Is prev/next empty char?
 function! s:is_empty(char) abort
     return a:char == ' ' || a:char == ''
 endfunction
@@ -79,7 +85,9 @@ function! brackets#InputParentheses(parenthesis) abort
 	let l:next_char = s:get_next_string(1)
 	let l:parentheses = { "{": "}", "[": "]", "(": ")", "<": ">" }
 
-	if ! s:is_inside_parentheses(l:prev_char, l:next_char) && ! s:is_empty(l:next_char)
+	if ! s:is_inside_parentheses(l:prev_char, l:next_char)
+            \ && ! s:is_inside_quote(l:prev_char, l:next_char)
+            \ && ! s:is_empty(l:next_char)
 	    return a:parenthesis
 	endif
 	return a:parenthesis.l:parentheses[a:parenthesis]."\<LEFT>"
@@ -99,15 +107,15 @@ endfunction
 function! brackets#InputQuote(quote) abort
 	let l:next_char = s:get_next_string(1)
 	let l:prev_char = s:get_prev_string(1)
-	let l:cursor_is_inside_the_same_quotes = (l:prev_char == a:quote && l:next_char == a:quote)
 
-	if l:cursor_is_inside_the_same_quotes
+	if s:is_inside_the_same_quote(a:quote, l:prev_char, l:next_char)
 		return "\<RIGHT>"
-	elseif s:is_close_parenthesis(l:prev_char) || l:prev_char == a:quote || l:next_char == a:quote
-		return a:quote
-	else
-		return a:quote.a:quote."\<LEFT>"
+	elseif ! s:is_inside_parentheses(l:prev_char, l:next_char) && ! s:is_inside_quote(l:prev_char, l:next_char)
+        if (! s:is_empty(l:prev_char) || ! s:is_empty(l:next_char))
+		    return a:quote
+        endif
 	endif
+	return a:quote.a:quote."\<LEFT>"
 endfunction
 
 " Entering the comma key
