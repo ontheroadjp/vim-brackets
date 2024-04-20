@@ -134,11 +134,15 @@ function! brackets#InputComma(comma) abort
 endfunction
 
 " Entering the dollar key
-function! brackets#InputDallar(dallar) abort
-    if &filetype ==# 'sh' || &filetype ==# 'fnc'
-        return a:dallar."{}\<left>"
-    else
-        return a:dallar
+function! brackets#InputDollar(dollar) abort
+	let l:prev_char = s:get_prev_string(1)
+	let l:next_char = s:get_next_string(1)
+    if is_empty(l:prev_char) && is_empty(l:next_char)
+        if &ft == 'sh' || &ft == 'fnc' || &ft == 'zsh' || &ft == 'bash'
+            return a:dollar."{}\<left>"
+        endif
+    endif
+    return a:dollar
 endfunction
 
 " Entering the <CR> key
