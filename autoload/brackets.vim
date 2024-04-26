@@ -1,21 +1,22 @@
 " Get the next string after the cursor
 " argument: the number of characters you want to get
 function! s:get_next_string(length) abort
-	let l:str = ""
-	for i in range(0, a:length-1)
-		let l:str = l:str.getline(".")[col(".")-1+i]
-	endfor
-	return l:str
+    let cursor_col = col('.') - 1
+    let line = getline('.')
+    let end_col = min([len(line) - 1, cursor_col + a:length - 1])
+    return line[cursor_col : end_col]
 endfunction
 
 " Get the previous string after the cursor
 " argument: the number of characters you want to get
 function! s:get_prev_string(length) abort
-	let l:str = ""
-	for i in range(0, a:length-1)
-		let l:str = getline(".")[col(".")-2-i].l:str
-	endfor
-	return l:str
+    let cursor_col = col('.') - 1
+    if cursor_col == 0
+        return ''
+    endif
+    let start_col = max([0, cursor_col - a:length])
+    let line = getline('.')
+    return line[start_col : cursor_col - 1]
 endfunction
 
 " Alphabetical or not?
@@ -53,8 +54,8 @@ function! s:is_empty(char) abort
     return a:char == ' ' || a:char == ''
 endfunction
 
-" Inside the brackets or not?
-function! s:is_inside_parentheses(prev_char,next_char) abort
+" Is the parentheses pair or not?
+function! s:is_parentheses_pair(prev_char,next_char) abort
 	let l:cursor_is_inside_parentheses1 = (a:prev_char == "{" && a:next_char == "}")
 	let l:cursor_is_inside_parentheses2 = (a:prev_char == "[" && a:next_char == "]")
 	let l:cursor_is_inside_parentheses3 = (a:prev_char == "(" && a:next_char == ")")
@@ -63,15 +64,15 @@ function! s:is_inside_parentheses(prev_char,next_char) abort
 endfunction
 
 " Inside a quote or not?
-function! s:is_inside_quote(prev_char, next_char) abort
+function! s:is_quote_pair(prev_char, next_char) abort
 	let l:exists_quote = (a:prev_char == "'" && a:next_char == "'")
 	let l:exists_double_quote = (a:prev_char == "\"" && a:next_char == "\"")
 	let l:exists_back_quote = (a:prev_char == "`" && a:next_char == "`")
     return (l:exists_quote || l:exists_double_quote || l:exists_back_quote)
 endfunction
 
-" Inside the same quote or not?
-function! s:is_inside_the_same_quote(char, prev_char, next_char) abort
+" Is the same quote pair or not?
+function! s:is_the_same_quote_pair(char, prev_char, next_char) abort
     return  (a:prev_char == a:char && a:next_char == a:char)
 endfunction
 
@@ -81,8 +82,8 @@ function! brackets#InputParentheses(parenthesis) abort
 	let l:next_char = s:get_next_string(1)
 	let l:parentheses = { "{": "}", "[": "]", "(": ")", "<": ">" }
 
-	if ! s:is_inside_parentheses(l:prev_char, l:next_char)
-            \ && ! s:is_inside_quote(l:prev_char, l:next_char)
+	if ! s:is_parentheses_pair(l:prev_char, l:next_char)
+            \ && ! s:is_quote_pair(l:prev_char, l:next_char)
             \ && ! s:is_empty(l:next_char)
 	    return a:parenthesis
 	endif
@@ -92,7 +93,6 @@ endfunction
 " Entering close bracket key
 function! brackets#InputCloseParenthesis(parenthesis) abort
 	let l:next_char = s:get_next_string(1)
-
 	if l:next_char == a:parenthesis
 		return "\<RIGHT>"
 	endif
@@ -101,31 +101,37 @@ endfunction
 
 " Entering the quote key
 function! brackets#InputQuote(quote) abort
-	let l:next_char = s:get_next_string(1)
 	let l:prev_char = s:get_prev_string(1)
+	let l:next_char = s:get_next_string(1)
+	let l:prev_two_char = s:get_prev_string(2)
+    " return '('.l:prev_char.')('.l:next_char.')'
 
-	if s:is_inside_the_same_quote(a:quote, l:prev_char, l:next_char)
+	if s:is_the_same_quote_pair(a:quote, l:prev_char, l:next_char)
 		return "\<RIGHT>"
-	elseif s:is_close_parenthesis(l:prev_char)
-		return a:quote
 
-    " in case of begining of a line
+    " prev char is empty
     elseif s:is_empty(l:prev_char) && ! s:is_empty(l:next_char)
-            return a:quote
-
-    " in case of inside chars
-    elseif ! s:is_empty(l:prev_char) && ! s:is_empty(l:next_char)
-    	if ! s:is_inside_parentheses(l:prev_char, l:next_char)
+        if ! s:is_close_parenthesis(l:next_char)
+                \ || l:prev_two_char != ', '
             return a:quote
         endif
 
-    " in case of end of a line
+    " inside chars
+    elseif ! s:is_empty(l:prev_char) && ! s:is_empty(l:next_char)
+        if ! s:is_parentheses_pair(l:prev_char, l:next_char)
+            if l:prev_char != ',' || ! s:is_close_parenthesis(l:next_char)
+                return a:quote
+            endif
+        endif
+
+    " next char is empty
     elseif ! s:is_empty(l:prev_char) && s:is_empty(l:next_char)
-        if l:prev_char != '=' && ! s:is_open_parenthesis(l:prev_char)
+        if l:prev_char != '='
+                \ && ! s:is_open_parenthesis(l:prev_char)
+                \ && l:prev_char != ','
             return a:quote
         endif
 	endif
-
 
 	return a:quote.a:quote."\<LEFT>"
 endfunction
@@ -161,7 +167,7 @@ endfunction
 function! brackets#InputCR() abort
 	let l:next_char = s:get_next_string(1)
 	let l:prev_char = s:get_prev_string(1)
-	let l:cursor_is_inside_parentheses = s:is_inside_parentheses(l:prev_char,l:next_char)
+	let l:cursor_is_inside_parentheses = s:is_parentheses_pair(l:prev_char,l:next_char)
 
 	if l:cursor_is_inside_parentheses
 		return "\<CR>\<ESC>\<S-o>"
@@ -178,7 +184,7 @@ function! brackets#InputSpace() abort
 	let l:next_two_string = s:get_next_string(2)
 	let l:prev_three_string = s:get_prev_string(3)
 	let l:next_three_string = s:get_next_string(3)
-	let l:cursor_is_inside_parentheses = s:is_inside_parentheses(l:prev_char,l:next_char)
+	let l:cursor_is_inside_parentheses = s:is_parentheses_pair(l:prev_char,l:next_char)
 
 	if l:cursor_is_inside_parentheses
 		return "\<Space>\<Space>\<LEFT>"
@@ -229,8 +235,8 @@ function! brackets#InputBS() abort
 	let l:next_three_string = s:get_next_string(3)
 	let l:prev_four_string = s:get_prev_string(4)
 	let l:next_four_string = s:get_next_string(4)
-	let l:cursor_is_inside_parentheses = s:is_inside_parentheses(l:prev_char,l:next_char)
-    let l:cursor_is_inside_quote = s:is_inside_quote(l:prev_char, l:next_char)
+	let l:cursor_is_inside_parentheses = s:is_parentheses_pair(l:prev_char,l:next_char)
+    let l:cursor_is_inside_quote = s:is_quote_pair(l:prev_char, l:next_char)
 	let l:cursor_is_inside_space1 = (l:prev_two_string == "{ " && l:next_two_string == " }")
 	let l:cursor_is_inside_space2 = (l:prev_two_string == "[ " && l:next_two_string == " ]")
 	let l:cursor_is_inside_space3 = (l:prev_two_string == "( " && l:next_two_string == " )")
