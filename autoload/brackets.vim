@@ -1,22 +1,29 @@
-" Get the next string after the cursor
 " argument: the number of characters you want to get
-function! s:get_next_string(length) abort
+function! s:get_prev_char(length) abort
+    let cursor_col = col('.') - 1
+    let line = getline('.')
+    let start_col = max([0, cursor_col - a:length])
+    return line[start_col : cursor_col - 1]
+endfunction
+
+function! s:get_prev_string() abort
+    let cursor_col = col('.') - 1
+    let line = getline('.')
+    return line[0 : cursor_col - 1]
+endfunction
+
+" argument: the number of characters you want to get
+function! s:get_next_char(length) abort
     let cursor_col = col('.') - 1
     let line = getline('.')
     let end_col = min([len(line) - 1, cursor_col + a:length - 1])
     return line[cursor_col : end_col]
 endfunction
 
-" Get the previous string after the cursor
-" argument: the number of characters you want to get
-function! s:get_prev_string(length) abort
+function! s:get_next_string() abort
     let cursor_col = col('.') - 1
-    if cursor_col == 0
-        return ''
-    endif
-    let start_col = max([0, cursor_col - a:length])
     let line = getline('.')
-    return line[start_col : cursor_col - 1]
+    return line[cursor_col : len(line)]
 endfunction
 
 " Alphabetical or not?
@@ -78,8 +85,8 @@ endfunction
 
 " Entering Parentheses key
 function! brackets#InputParentheses(parenthesis) abort
-	let l:prev_char = s:get_prev_string(1)
-	let l:next_char = s:get_next_string(1)
+	let l:prev_char = s:get_prev_char(1)
+	let l:next_char = s:get_next_char(1)
 	let l:parentheses = { "{": "}", "[": "]", "(": ")", "<": ">" }
 
 	if ! s:is_parentheses_pair(l:prev_char, l:next_char)
@@ -92,7 +99,7 @@ endfunction
 
 " Entering close bracket key
 function! brackets#InputCloseParenthesis(parenthesis) abort
-	let l:next_char = s:get_next_string(1)
+	let l:next_char = s:get_next_char(1)
 	if l:next_char == a:parenthesis
 		return "\<RIGHT>"
 	endif
@@ -101,9 +108,9 @@ endfunction
 
 " Entering the quote key
 function! brackets#InputQuote(quote) abort
-	let l:prev_char = s:get_prev_string(1)
-	let l:next_char = s:get_next_string(1)
-	let l:prev_two_char = s:get_prev_string(2)
+	let l:prev_char = s:get_prev_char(1)
+	let l:next_char = s:get_next_char(1)
+	let l:prev_two_char = s:get_prev_char(2)
     " return '('.l:prev_char.')('.l:next_char.')'
 
 	if s:is_the_same_quote_pair(a:quote, l:prev_char, l:next_char)
@@ -138,13 +145,10 @@ endfunction
 
 " Entering the comma key
 function! brackets#InputComma(comma) abort
-	let l:next_char = s:get_next_string(1)
-	let l:prev_char = s:get_prev_string(1)
-	let l:next_char_is_empty = (l:next_char == "")
-	let l:next_char_is_space = (l:next_char == " ")
-	let l:next_char_is_close_parenthesis = s:is_close_parenthesis(l:next_char)
-
-    if (l:prev_char == "\"" || l:prev_char == "'") && (l:next_char_is_space || l:next_char_is_empty || l:next_char_is_close_parenthesis)
+	let l:next_char = s:get_next_char(1)
+	let l:prev_char = s:get_prev_char(1)
+    if s:is_quote(l:prev_char)
+            \ && (s:is_empty(l:next_char) || s:is_close_parenthesis(l:next_char))
         return ", ".l:prev_char.l:prev_char."\<left>"
     else
         return ","
@@ -153,11 +157,11 @@ endfunction
 
 " Entering the dollar key
 function! brackets#InputDollar(dollar) abort
-	let l:prev_char = s:get_prev_string(1)
-	let l:next_char = s:get_next_string(1)
-    if s:is_empty(l:prev_char) && s:is_empty(l:next_char)
-        if &ft == 'sh' || &ft == 'fnc' || &ft == 'zsh' || &ft == 'bash'
-            return a:dollar."{}\<left>"
+    if &ft == 'sh' || &ft == 'fnc' || &ft == 'zsh' || &ft == 'bash'
+    	let l:prev_char = s:get_prev_char(1)
+    	let l:next_char = s:get_next_char(1)
+        if s:is_empty(l:prev_char) && s:is_empty(l:next_char)
+            return "${}\<left>"
         endif
     endif
     return a:dollar
@@ -165,11 +169,9 @@ endfunction
 
 " Entering the <CR> key
 function! brackets#InputCR() abort
-	let l:next_char = s:get_next_string(1)
-	let l:prev_char = s:get_prev_string(1)
-	let l:cursor_is_inside_parentheses = s:is_parentheses_pair(l:prev_char,l:next_char)
-
-	if l:cursor_is_inside_parentheses
+	let l:next_char = s:get_next_char(1)
+	let l:prev_char = s:get_prev_char(1)
+	if s:is_parentheses_pair(l:prev_char,l:next_char)
 		return "\<CR>\<ESC>\<S-o>"
 	else
 		return "\<CR>"
@@ -178,84 +180,50 @@ endfunction
 
 " Entering the <SPACE> key
 function! brackets#InputSpace() abort
-	let l:prev_char = s:get_prev_string(1)
-	let l:next_char = s:get_next_string(1)
-	let l:prev_two_string = s:get_prev_string(2)
-	let l:next_two_string = s:get_next_string(2)
-	let l:prev_three_string = s:get_prev_string(3)
-	let l:next_three_string = s:get_next_string(3)
-	let l:cursor_is_inside_parentheses = s:is_parentheses_pair(l:prev_char,l:next_char)
+	let l:prev_char = s:get_prev_char(1)
+	let l:next_char = s:get_next_char(1)
+    let l:prev_string = s:get_prev_string()
+    let l:next_string = s:get_next_string()
 
-	if l:cursor_is_inside_parentheses
+	if s:is_parentheses_pair(l:prev_char,l:next_char)
 		return "\<Space>\<Space>\<LEFT>"
 	endif
 
-    if l:prev_two_string == "==" && l:prev_three_string != " =="
-        return "\<BS>\<BS>\<Space>==\<Space>"
-    elseif l:next_two_string == "==" && l:next_three_string != "== "
-        return "\<right>\<right>\<BS>\<BS>\<Space>==\<Space>"
-    elseif l:prev_two_string == "!=" && l:prev_three_string != " !="
-        return "\<BS>\<BS>\<Space>!=\<Space>"
-    elseif l:next_two_string == "!=" && l:next_three_string != "!= "
-        return "\<right>\<right>\<BS>\<BS>\<Space>!=\<Space>"
-    elseif l:prev_two_string == "+=" && l:prev_three_string != " +="
-        return "\<BS>\<BS>\<Space>+=\<Space>"
-    elseif l:next_two_string == "+=" && l:next_three_string != "+= "
-        return "\<right>\<right>\<BS>\<BS>\<Space>+=\<Space>"
-    elseif l:prev_two_string == "-=" && l:prevThreeString != " -="
-        return "\<BS>\<BS>\<Space>-=\<Space>"
-    elseif l:next_two_string == "-=" && l:next_three_string != "-= "
-        return "\<right>\<right>\<BS>\<BS>\<Space>-=\<Space>"
+    if l:prev_string =~ '\S[\!\=\+\-]=$' || l:prev_string =~ '\S\=\~$'
+        return "\<left>\<left>\<Space>\<right>\<right>\<Space>"
+    elseif l:next_string =~ '^=[\=\~]\S' || l:next_string =~ '^[\!\+\-]=\S'
+        return "\<space>\<right>\<right>\<Space>"
+    elseif l:prev_string =~ '\S=$' && l:prev_string !~ '==$'
+        return "\<left>\<space>\<right>\<Space>"
+    elseif l:next_string =~ '^=\S' && l:next_string !~ '^=='
+        return "\<space>\<right>\<Space>"
     endif
 
-    if l:prev_char == "="
-                \ && l:prev_two_string != " ="
-                \ && l:prev_two_string != "!="
-                \ && l:prev_two_string != "=="
-                \ && l:prev_two_string != "+="
-                \ && l:prev_two_string != "-="
-        return "\<BS>\<Space>=\<Space>"
-    endif
-    if l:next_char == "="
-                \ && l:next_two_string != "= "
-                \ && l:next_two_string != "=="
-                \ && l:next_two_string != "=~"
-        return "\<right>\<BS>\<Space>=\<Space>"
-    endif
 	return "\<Space>"
 endfunction
 
 " Entering the <BS> key
 function! brackets#InputBS() abort
-	let l:prev_char = s:get_prev_string(1)
-	let l:next_char = s:get_next_string(1)
-	let l:prev_two_string = s:get_prev_string(2)
-	let l:next_two_string = s:get_next_string(2)
-	let l:prev_three_string = s:get_prev_string(3)
-	let l:next_three_string = s:get_next_string(3)
-	let l:prev_four_string = s:get_prev_string(4)
-	let l:next_four_string = s:get_next_string(4)
-	let l:cursor_is_inside_parentheses = s:is_parentheses_pair(l:prev_char,l:next_char)
-    let l:cursor_is_inside_quote = s:is_quote_pair(l:prev_char, l:next_char)
-	let l:cursor_is_inside_space1 = (l:prev_two_string == "{ " && l:next_two_string == " }")
-	let l:cursor_is_inside_space2 = (l:prev_two_string == "[ " && l:next_two_string == " ]")
-	let l:cursor_is_inside_space3 = (l:prev_two_string == "( " && l:next_two_string == " )")
-	let l:cursor_is_inside_space4 = (l:prev_two_string == "< " && l:next_two_string == " >")
-	let l:cursor_is_inside_space = (l:cursor_is_inside_space1 || l:cursor_is_inside_space2 || l:cursor_is_inside_space3 || l:cursor_is_inside_space4)
+	let l:prev_char = s:get_prev_char(1)
+	let l:next_char = s:get_next_char(1)
 
-    if l:prev_four_string == ' == '
+    if s:is_parentheses_pair(l:prev_char, l:next_char)
+        return "\<right>\<BS>\<BS>"
+    endif
+
+    if s:get_prev_string() =~ '\s==\s$'
         return "\<BS>\<BS>\<BS>\<BS>=="
-    elseif l:next_three_string == '== '
+    elseif s:is_empty(l:prev_char) && s:get_next_string() =~ '^==\s'
         return "\<right>\<right>\<right>\<BS>\<BS>\<BS>\<BS>=="
     endif
 
-    if l:prev_three_string == ' = '
+    if s:get_prev_string() =~ '\s=\s$'
         return "\<BS>\<BS>\<BS>="
-    elseif l:next_two_string == '= '
+    elseif s:is_empty(l:prev_char) && s:get_next_string() =~ '^=\s'
         return "\<right>\<right>\<BS>\<BS>\<BS>="
     endif
 
-	if l:cursor_is_inside_parentheses || l:cursor_is_inside_quote || l:cursor_is_inside_space
+	if s:get_prev_string() =~ '[\(\[{]\s$' && s:get_next_string() =~ '^ [\)\]}>]'
 		return "\<BS>\<RIGHT>\<BS>"
 	endif
 
