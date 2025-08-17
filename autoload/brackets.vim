@@ -109,6 +109,8 @@ endfunction
 
 " Entering close bracket key
 function! brackets#InputCloseParenthesis(parenthesis) abort
+    if s:is_disabled_in_current_filetype() | return a:parenthesis | endif
+
 	let l:next_char = s:get_next_char(1)
 	if l:next_char == a:parenthesis
 		return "\<RIGHT>"
