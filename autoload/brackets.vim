@@ -1,3 +1,10 @@
+" --- Internal Helper Functions
+let s:disabled_filetypes = get(g:, 'brackets_disabled_filetypes', [])
+function! s:is_disabled_in_current_filetype() abort
+    return index(s:disabled_filetypes, &filetype) != -1
+endfunction
+" --- end
+
 " argument: the number of characters you want to get
 function! s:get_prev_char(length) abort
     let cursor_col = col('.') - 1
@@ -85,12 +92,15 @@ endfunction
 
 " Entering Parentheses key
 function! brackets#InputParentheses(parenthesis) abort
+    if s:is_disabled_in_current_filetype() | return a:parenthesis | endif
+
 	let l:prev_char = s:get_prev_char(1)
 	let l:next_char = s:get_next_char(1)
 	let l:parentheses = { "{": "}", "[": "]", "(": ")", "<": ">" }
 
 	if ! s:is_parentheses_pair(l:prev_char, l:next_char)
             \ && ! s:is_quote_pair(l:prev_char, l:next_char)
+            \ && l:next_char != ':'
             \ && ! s:is_empty(l:next_char)
 	    return a:parenthesis
 	endif
@@ -108,6 +118,8 @@ endfunction
 
 " Entering the quote key
 function! brackets#InputQuote(quote) abort
+    if s:is_disabled_in_current_filetype() | return a:quote | endif
+
 	let l:prev_char = s:get_prev_char(1)
 	let l:next_char = s:get_next_char(1)
 	let l:prev_two_char = s:get_prev_char(2)
@@ -145,11 +157,31 @@ endfunction
 
 " Entering the comma key
 function! brackets#InputComma(comma) abort
+    if s:is_disabled_in_current_filetype() | return a:comma | endif
+
 	let l:next_char = s:get_next_char(1)
 	let l:prev_char = s:get_prev_char(1)
-    if s:is_quote(l:prev_char)
-            \ && (s:is_empty(l:next_char) || s:is_close_parenthesis(l:next_char))
-        return ", ".l:prev_char.l:prev_char."\<left>"
+    " if s:is_quote(l:prev_char)
+    "         \ && (s:is_empty(l:next_char) || s:is_close_parenthesis(l:next_char))
+    "     return ", ".l:prev_char.l:prev_char."\<left>"
+    " else
+    "     return ","
+    " endif
+
+    " if s:is_quote(l:prev_char)
+    "     if (s:is_empty(l:next_char) || s:is_close_parenthesis(l:next_char))
+    "         return ", ".l:prev_char.l:prev_char."\<left>"
+    "     endif
+    " else
+    "     return ","
+    " endif
+
+    if (s:is_empty(l:next_char) || s:is_close_parenthesis(l:next_char))
+        if s:is_quote(l:prev_char)
+            return ", ".l:prev_char.l:prev_char."\<left>"
+        else
+            return ", "
+        endif
     else
         return ","
     endif
@@ -157,6 +189,8 @@ endfunction
 
 " Entering the dollar key
 function! brackets#InputDollar(dollar) abort
+    if s:is_disabled_in_current_filetype() | return a:dollar | endif
+
     if &ft == 'sh' || &ft == 'fnc' || &ft == 'zsh' || &ft == 'bash'
     	let l:prev_char = s:get_prev_char(1)
     	let l:next_char = s:get_next_char(1)
@@ -169,17 +203,31 @@ endfunction
 
 " Entering the <CR> key
 function! brackets#InputCR() abort
+    if s:is_disabled_in_current_filetype() | return "\<CR>" | endif
+
+    if exists('g:plugs') && exists('*IsPlugged')
+        if IsPlugged("vim-snipmate")
+                \ && g:bracket#snipmate_cr_trigger_enable
+                \ && pumvisible()
+            return "\<ESC>a\<C-R>=snipMate#TriggerSnippet()\<CR>"
+        elseif IsPlugged("asyncomplete.vim")
+                \ && g:bracket#asyncomplete_cr_trigger_enable
+                \ && pumvisible()
+            return asyncomplete#close_popup()
+        endif
+    endif
 	let l:next_char = s:get_next_char(1)
 	let l:prev_char = s:get_prev_char(1)
-	if s:is_parentheses_pair(l:prev_char,l:next_char)
+    if s:is_parentheses_pair(l:prev_char,l:next_char)
 		return "\<CR>\<ESC>\<S-o>"
-	else
-		return "\<CR>"
-	endif
+    endif
+	return "\<CR>"
 endfunction
 
 " Entering the <SPACE> key
 function! brackets#InputSpace() abort
+    if s:is_disabled_in_current_filetype() | return "\<Space>" | endif
+
 	let l:prev_char = s:get_prev_char(1)
 	let l:next_char = s:get_next_char(1)
     let l:prev_string = s:get_prev_string()
@@ -189,25 +237,32 @@ function! brackets#InputSpace() abort
 		return "\<Space>\<Space>\<LEFT>"
 	endif
 
-    if l:prev_string =~ '\S[\!\=\+\-]=$' || l:prev_string =~ '\S\=\~$'
-        return "\<left>\<left>\<Space>\<right>\<right>\<Space>"
-    elseif l:next_string =~ '^=[\=\~]\S' || l:next_string =~ '^[\!\+\-]=\S'
-        return "\<space>\<right>\<right>\<Space>"
-    elseif l:prev_string =~ '\S=$' && l:prev_string !~ '==$'
-        return "\<left>\<space>\<right>\<Space>"
-    elseif l:next_string =~ '^=\S' && l:next_string !~ '^=='
-        return "\<space>\<right>\<Space>"
+    if l:prev_string !~ '\s[\!\=\+\-]=$'
+        if l:prev_string =~ '\S[\!\=\+\-]=$' || l:prev_string =~ '\S\=\~$'
+            return "\<left>\<left>\<Space>\<right>\<right>\<Space>"
+        elseif l:next_string =~ '^=[\=\~]\S' || l:next_string =~ '^[\!\+\-]=\S'
+            return "\<space>\<right>\<right>\<Space>"
+        elseif l:prev_string =~ '\S=$' && l:prev_string !~ '==$'
+            return "\<left>\<space>\<right>\<Space>"
+        elseif l:next_string =~ '^=\S' && l:next_string !~ '^=='
+            return "\<space>\<right>\<Space>"
+        endif
     endif
-
 	return "\<Space>"
 endfunction
 
 " Entering the <BS> key
 function! brackets#InputBS() abort
+    if s:is_disabled_in_current_filetype() | return "\<BS>" | endif
+
 	let l:prev_char = s:get_prev_char(1)
 	let l:next_char = s:get_next_char(1)
 
     if s:is_parentheses_pair(l:prev_char, l:next_char)
+        return "\<right>\<BS>\<BS>"
+    endif
+
+    if l:prev_char == l:next_char
         return "\<right>\<BS>\<BS>"
     endif
 
